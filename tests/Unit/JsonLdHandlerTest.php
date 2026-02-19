@@ -1,11 +1,13 @@
 <?php
 
-use App\Services\Ontology\Exceptions\OntologyImportException;
-use App\Services\Ontology\Parsers\Handlers\JsonLdHandler;
-use App\Services\Ontology\Parsers\ValueObjects\ParsedRdf;
+declare(strict_types=1);
+
+use Youri\vandenBogert\Software\ParserCore\Exceptions\ParseException;
+use Youri\vandenBogert\Software\ParserCore\ValueObjects\ParsedRdf;
+use Youri\vandenBogert\Software\ParserJsonLd\JsonLdHandler;
 
 beforeEach(function () {
-    $this->handler = new JsonLdHandler;
+    $this->handler = new JsonLdHandler();
 });
 
 it('detects json-ld with @context', function () {
@@ -24,5 +26,5 @@ it('parses valid json-ld', function () {
 });
 
 it('throws on missing context', function () {
-    expect(fn () => $this->handler->parse('{"name":"x"}'))->toThrow(OntologyImportException::class);
+    expect(fn () => $this->handler->parse('{"name":"x"}'))->toThrow(ParseException::class);
 });

@@ -1,0 +1,3 @@
+# Preserve line endings for W3C test fixture files
+*.jsonld text eol=lf
+*.nq text eol=lf
