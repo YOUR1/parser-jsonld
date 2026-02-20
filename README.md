@@ -1,5 +1,8 @@
 # parser-jsonld
 
+[![CI](https://github.com/YOUR1/parser-jsonld/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR1/parser-jsonld/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/YOUR1/parser-jsonld/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR1/parser-jsonld)
+
 JSON-LD handler parser package.
 
 ## License
