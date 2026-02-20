@@ -68,7 +68,7 @@ foreach ($positiveTests as $test) {
         $inputContent = w3cFixture($inputFile);
         $baseUri = 'https://w3c.github.io/json-ld-api/tests/' . $inputFile;
 
-        // Check for @context at top level
+        // Check for @context at top level (still required for parse())
         if (!hasTopLevelContext($inputContent)) {
             $this->markTestSkipped('JsonLdHandler requires @context at top level -- handler limitation');
         }
@@ -78,9 +78,9 @@ foreach ($positiveTests as $test) {
             $this->markTestSkipped('Test requires remote context resolution');
         }
 
-        // Try parsing via handler first
+        // Try parsing via handler with base URI
         try {
-            $result = $handler->parse($inputContent);
+            $result = $handler->parseWithOptions($inputContent, ['base' => $baseUri]);
         } catch (ParseException $e) {
             // If this is a JSON-LD 1.1 feature not supported, skip
             $msg = $e->getMessage();
@@ -103,15 +103,8 @@ foreach ($positiveTests as $test) {
         // Handler parsed successfully -- now compare triples
         expect($result)->not->toBeNull();
 
-        // Parse via EasyRdf with base URI for triple comparison
-        $graph = new Graph($baseUri);
-        try {
-            $graph->parse($inputContent, 'jsonld', $baseUri);
-        } catch (\Throwable $e) {
-            $this->markTestSkipped(
-                "EasyRdf graph->parse() failed with base URI: {$e->getMessage()}"
-            );
-        }
+        // Use the graph from the handler result (already parsed with base URI)
+        $graph = $result->graph;
 
         // Serialize to N-Triples
         $actualNt = $graph->serialise('ntriples');

@@ -30,19 +30,19 @@ describe('JsonLdHandler', function () {
             expect($this->handler->canHandle($content))->toBeTrue();
         });
 
-        it('returns true for content with @context nested deeper in JSON (false positive — key at wrong level)', function () {
+        it('returns false for content with @context nested deeper in JSON (no longer a false positive — proper JSON parsing)', function () {
             $content = '{"data": {"@context": "http://example.org/"}, "other": "value"}';
-            expect($this->handler->canHandle($content))->toBeTrue();
+            expect($this->handler->canHandle($content))->toBeFalse();
         });
 
-        it('returns true for content with @context only in a string value (false positive — str_contains matches anywhere)', function () {
+        it('returns false for content with @context only in a string value (no longer a false positive — proper JSON parsing)', function () {
             $content = '{"description": "This mentions @context in text but has no real JSON-LD context"}';
-            expect($this->handler->canHandle($content))->toBeTrue();
+            expect($this->handler->canHandle($content))->toBeFalse();
         });
 
-        it('returns true for invalid JSON that starts with { and contains @context', function () {
+        it('returns false for invalid JSON that starts with { and contains @context', function () {
             $content = '{broken json @context here}';
-            expect($this->handler->canHandle($content))->toBeTrue();
+            expect($this->handler->canHandle($content))->toBeFalse();
         });
 
         // --- False cases ---
@@ -74,9 +74,9 @@ describe('JsonLdHandler', function () {
             expect($this->handler->canHandle($content))->toBeFalse();
         });
 
-        it('returns false for JSON array starting with [', function () {
+        it('returns true for JSON array starting with [ that contains JSON-LD keywords', function () {
             $content = '[{"@context": {"ex": "http://example.org/"}}]';
-            expect($this->handler->canHandle($content))->toBeFalse();
+            expect($this->handler->canHandle($content))->toBeTrue();
         });
 
         it('returns false for JSON without @context', function () {
@@ -131,15 +131,15 @@ describe('JsonLdHandler', function () {
             expect($result->rawContent)->toBe($content);
         });
 
-        it('has metadata with required keys: parser, format, resource_count, context', function () {
+        it('has metadata with required keys: parser, format, resource_count, context, named_graphs', function () {
             $content = json_encode([
                 '@context' => ['rdfs' => 'http://www.w3.org/2000/01/rdf-schema#'],
                 '@id' => 'http://example.org/A',
                 '@type' => 'rdfs:Class',
             ]);
             $result = $this->handler->parse($content);
-            expect($result->metadata)->toHaveKeys(['parser', 'format', 'resource_count', 'context']);
-            expect($result->metadata)->toHaveCount(4);
+            expect($result->metadata)->toHaveKeys(['parser', 'format', 'resource_count', 'context', 'named_graphs']);
+            expect($result->metadata)->toHaveCount(5);
         });
 
         it('has metadata parser = jsonld_handler', function () {
@@ -426,9 +426,10 @@ describe('JsonLdHandler', function () {
             }
         });
 
-        it('demonstrates canHandle/parse gap: content passes canHandle but fails parse', function () {
+        it('demonstrates canHandle/parse gap: broken JSON with @context now rejected by canHandle', function () {
             $content = '{broken json @context}';
-            expect($this->handler->canHandle($content))->toBeTrue();
+            expect($this->handler->canHandle($content))->toBeFalse();
+            // parse() still throws for invalid JSON
             expect(fn () => $this->handler->parse($content))->toThrow(ParseException::class);
         });
     });

@@ -1,7 +1,7 @@
 # Spec Completeness
 
 > Assessment of parser-jsonld implementation coverage against W3C JSON-LD 1.1.
-> Last updated: 2026-02-19
+> Last updated: 2026-02-20 (after Epic 11 completion)
 
 ## Scope
 
@@ -9,9 +9,9 @@ This library provides a single **JSON-LD format handler** (`JsonLdHandler`) that
 JSON-LD content into a `ParsedRdf` value object. It implements the `RdfFormatHandlerInterface` contract
 from `parser-core`.
 
-Actual JSON-LD-to-RDF conversion is delegated to **EasyRdf** + **ml/json-ld ^1.2**, which implements
-the JSON-LD 1.0 Processing Algorithms. JSON-LD 1.1 features are therefore only supported to the extent
-that ml/json-ld handles them.
+Actual JSON-LD-to-RDF conversion is delegated to **EasyRdf** + **sweetrdf/json-ld ^1.3** (a maintained
+fork of ml/json-ld, same `ML\JsonLD\` namespace), which implements the JSON-LD 1.0 Processing Algorithms.
+JSON-LD 1.1 features are therefore only supported to the extent that sweetrdf/json-ld handles them.
 
 Reference: [W3C JSON-LD 1.1](https://www.w3.org/TR/json-ld11/)
 
@@ -20,17 +20,17 @@ Reference: [W3C JSON-LD 1.1](https://www.w3.org/TR/json-ld11/)
 | Spec Area | Implemented | Total | Coverage |
 |---|---|---|---|
 | Handler Interface Contract | 3 | 3 | 100% |
-| Format Detection | 3 | 5 | 60% |
+| Format Detection | 5 | 5 | 100% |
 | JSON-LD Keywords (1.0 core) | 11 | 11 | 100% |
 | JSON-LD Keywords (1.1 additions) | 0 | 10 | 0% |
-| Context Handling | 4 | 7 | 57% |
-| Parsing to ParsedRdf | 5 | 5 | 100% |
-| Error Handling | 3 | 3 | 100% |
-| W3C Conformance -- toRdf Positive | 22 | 345 | 6% |
-| W3C Conformance -- toRdf Negative | 43 | 106 | 41% |
+| Context Handling | 6 | 7 | 86% |
+| Parsing to ParsedRdf | 6 | 6 | 100% |
+| Error Handling | 4 | 4 | 100% |
+| W3C Conformance -- toRdf Positive | 79 | 345 | 23% |
+| W3C Conformance -- toRdf Negative | 90 | 106 | 85% |
 | W3C Conformance -- Positive Syntax | 0 | 16 | 0% |
-| **Overall (handler code)** | | | **~85%** |
-| **Overall (W3C toRdf suite)** | | | **~14%** |
+| **Overall (handler code)** | | | **~95%** |
+| **Overall (W3C toRdf suite)** | | | **~36%** |
 
 ---
 
@@ -40,9 +40,10 @@ Reference: `parser-core` `RdfFormatHandlerInterface`
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| `canHandle(string $content): bool` | implemented | `JsonLdHandler:21-30` | `Characterization:18,23,28,33,38,43,50,54,58,63,68,72,77,82,87,91,96` (17 cases) |
-| `parse(string $content): ParsedRdf` | implemented | `JsonLdHandler:32-67` | `Characterization:103,114,124,134,145,155,165,176,187,208,224,239,251,266,280,292,305` (17 cases) |
-| `getFormatName(): string` | implemented | `JsonLdHandler:69-72` | `Unit:17-19`, `Characterization:314-315,318-319` (3 cases) |
+| `canHandle(string $content): bool` | implemented | `JsonLdHandler:44-71` | `CanHandleDetectionTest` (23 cases), `Characterization` (17 cases) |
+| `parse(string $content): ParsedRdf` | implemented | `JsonLdHandler:100-103` (delegates to `parseWithOptions`) | `Characterization` (17 cases), `Unit` (4 cases) |
+| `parseWithOptions(string $content, array $options): ParsedRdf` | implemented | `JsonLdHandler:114-161` | `BaseUriAndXsdStringTest` (8 cases), `RemoteContextTest` (8 cases), `NamedGraphSupportTest` (6 cases) |
+| `getFormatName(): string` | implemented | `JsonLdHandler:266-269` | `Unit:17-19`, `Characterization` |
 
 ---
 
@@ -52,20 +53,18 @@ Reference: [JSON-LD 1.1 -- Section 9 (JSON-LD Grammar)](https://www.w3.org/TR/js
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| Detects JSON object starting with `{` | implemented | `JsonLdHandler:25-27` | `Characterization:50,54,58,63,68,72,77,82,87,91,96` |
-| Detects `@context` keyword (substring match) | implemented | `JsonLdHandler:29` | `Characterization:18,23,28,33,38,43` |
-| Case-sensitive `@context` matching | implemented | `JsonLdHandler:29` | `Characterization:91-93` (`@Context` with uppercase C returns false) |
-| JSON-LD arrays (top-level `[`) | not handled | `JsonLdHandler:25` returns false | `Characterization:77-79` (returns false for `[{...}]`) |
-| Content without `@context` (bare node objects) | not detected | `JsonLdHandler:29` requires `@context` | `Characterization:82-85` (e.g., `{"name":"foo"}` returns false) |
+| Detects JSON object starting with `{` | implemented | `JsonLdHandler:48` | `CanHandleDetectionTest`, `Characterization` |
+| Detects JSON-LD keywords at top level | implemented | `JsonLdHandler:78-98` (`hasJsonLdSignals`) | `CanHandleDetectionTest` (10 true cases) |
+| JSON-LD arrays (top-level `[`) | implemented | `JsonLdHandler:58-65` | `CanHandleDetectionTest` (array detection) |
+| Full IRI keys (http:// or https://) | implemented | `JsonLdHandler:91-95` | `CanHandleDetectionTest` (IRI key detection) |
+| Content without `@context` (bare node objects with keywords) | implemented | `JsonLdHandler:78-98` | `CanHandleDetectionTest` (contextless JSON-LD with @id, @type) |
 
-**Notes on detection limitations:**
+**Notes:**
 
-- `canHandle` uses `str_contains($trimmed, '@context')` which matches `@context` anywhere in the string,
-  including inside property values and nested objects. This produces false positives for non-JSON-LD
-  JSON that happens to contain the substring `@context` (documented in `Characterization:38-41`).
-- Valid JSON-LD that omits `@context` (using full IRIs as keys) is not detected.
-  This affects 16 of the 16 W3C Positive Syntax tests, all of which lack a top-level `@context`.
-- JSON-LD arrays (`[{...}]`) are valid per the spec but rejected by `canHandle`.
+- `canHandle` now uses proper JSON decoding and top-level key inspection (no more substring matching).
+- Valid JSON-LD with only full IRI keys (no @ keywords) is now detected.
+- JSON-LD arrays (`[{...}]`) are now supported.
+- Documents without any JSON-LD signals are correctly rejected.
 
 ---
 
@@ -73,34 +72,35 @@ Reference: [JSON-LD 1.1 -- Section 9 (JSON-LD Grammar)](https://www.w3.org/TR/js
 
 Reference: [JSON-LD 1.1 -- Section 9.16 (Keywords)](https://www.w3.org/TR/json-ld11/#keywords)
 
-These keywords are supported via delegation to EasyRdf + ml/json-ld:
+These keywords are supported via delegation to EasyRdf + sweetrdf/json-ld:
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| `@context` | supported | `JsonLdHandler:41-43` (validated), EasyRdf `Parser\JsonLd:79` | `Characterization:103-112`, `Unit:13-15,21-26` |
-| `@id` (node identifiers) | supported | via EasyRdf/ml-json-ld | `Characterization:239-249` (resource URI in graph) |
-| `@type` (type coercion + `rdf:type`) | supported | via EasyRdf/ml-json-ld | `Characterization:239-249`, W3C `t0007` |
-| `@value` (value objects) | supported | via EasyRdf/ml-json-ld | `Characterization:251-264` (`@value` + `@type`), `Characterization:280-290` (`@value` + `@language`) |
-| `@language` (language tags) | supported | via EasyRdf/ml-json-ld | `Characterization:280-290` (language-tagged literal) |
-| `@graph` (named graphs) | partial | EasyRdf `Parser\JsonLd:86-88` ignores named graphs | `Characterization:266-278` (default graph portion only) |
-| `@list` (ordered collections) | supported | via EasyRdf/ml-json-ld | W3C `t0013`, `t0014`, `t0015` |
-| `@set` (unordered collections) | supported | via EasyRdf/ml-json-ld | W3C tests in manifest |
-| `@reverse` (reverse properties) | supported | via EasyRdf/ml-json-ld | W3C `t0029` (Reverse property) |
-| `@base` (base IRI) | partial | via ml-json-ld (some resolution differences) | W3C `t0017-t0018` (relative IRIs) |
-| `@vocab` (default vocabulary) | supported | via EasyRdf/ml-json-ld | W3C tests with `@vocab` in context |
+| `@context` | supported | `JsonLdHandler:122-124` (validated), EasyRdf `Parser\JsonLd:79` | `Characterization`, `Unit`, `BaseUriAndXsdStringTest` |
+| `@id` (node identifiers) | supported | via EasyRdf/sweetrdf-json-ld | `Characterization`, W3C tests |
+| `@type` (type coercion + `rdf:type`) | supported | via EasyRdf/sweetrdf-json-ld | `Characterization`, W3C tests |
+| `@value` (value objects) | supported | via EasyRdf/sweetrdf-json-ld | `Characterization` |
+| `@language` (language tags) | supported | via EasyRdf/sweetrdf-json-ld | `Characterization`, `JsonLd11KeywordsTest` (@language container) |
+| `@graph` (named graphs) | supported | EasyRdf (default graph) + `extractNamedGraphs()` (named graphs in metadata) | `NamedGraphSupportTest` (6 tests) |
+| `@list` (ordered collections) | supported | via EasyRdf/sweetrdf-json-ld | `JsonLd11KeywordsTest`, W3C tests |
+| `@set` (unordered collections) | supported | via EasyRdf/sweetrdf-json-ld | `JsonLd11KeywordsTest`, W3C tests |
+| `@reverse` (reverse properties) | supported | via EasyRdf/sweetrdf-json-ld | W3C tests |
+| `@base` (base IRI) | supported | via `parseWithOptions(['base' => ...])` | `BaseUriAndXsdStringTest` (5 tests) |
+| `@vocab` (default vocabulary) | supported | via EasyRdf/sweetrdf-json-ld | W3C tests |
 
-### Named Graph Limitation
+### Named Graph Support
 
-EasyRdf's JSON-LD parser (`Parser\JsonLd:86-88`) explicitly skips quads belonging to named graphs:
+Named graph quads are now preserved via `JsonLdHandler::extractNamedGraphs()`. EasyRdf's JSON-LD parser
+still only populates the default graph, but named graph triples are extracted directly from
+`ML\JsonLD\JsonLD::toRdf()` and stored in `metadata['named_graphs']` as a keyed array:
 
 ```php
-if (null !== $quad->getGraph()) {
-    continue;
-}
+$metadata['named_graphs'] = [
+    'http://example.org/graph1' => [
+        ['subject' => '...', 'predicate' => '...', 'object' => '...'],
+    ],
+];
 ```
-
-This means only the **default graph** is populated. All W3C tests expecting named graph output
-are skipped in the conformance suite.
 
 ---
 
@@ -108,21 +108,21 @@ are skipped in the conformance suite.
 
 Reference: [JSON-LD 1.1 -- Section 4 (Advanced Concepts)](https://www.w3.org/TR/json-ld11/#advanced-concepts)
 
-These keywords were introduced in JSON-LD 1.1 and are **not supported** because ml/json-ld ^1.2
+These keywords were introduced in JSON-LD 1.1 and are **not supported** because sweetrdf/json-ld ^1.3
 implements the JSON-LD 1.0 Processing Algorithms:
 
-| Feature | Status | Location | Tests |
+| Feature | Status | Behavior in 1.0 Processor | Tests |
 |---|---|---|---|
-| `@nest` (property nesting) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@included` (included blocks) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@json` (JSON literal type) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@direction` (text direction) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@propagate` (context propagation) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@protected` (protected term defs) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@import` (context import) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@prefix` (prefix flag) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@version` (processing mode) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@container: @id` / `@type` / `@graph` (1.1 container types) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
+| `@version` (processing mode) | not supported | Causes `JsonLdException` (unknown keyword) | `JsonLd11KeywordsTest` |
+| `@nest` (property nesting) | not supported | Silently ignored, nested values lost | `JsonLd11KeywordsTest` |
+| `@included` (included blocks) | not supported | Silently ignored, included nodes not emitted | `JsonLd11KeywordsTest` |
+| `@json` (JSON literal type) | not supported | Silent degradation (no rdf:JSON datatype) | `JsonLd11KeywordsTest` |
+| `@direction` (text direction) | not supported | Silently ignored, no direction info in output | `JsonLd11KeywordsTest` |
+| `@propagate` (context propagation) | not supported | Silently ignored | `JsonLd11KeywordsTest` |
+| `@protected` (protected term defs) | not supported | Silently ignored, redefinition allowed | `JsonLd11KeywordsTest` |
+| `@import` (context import) | not supported | Silently ignored or may fail | `JsonLd11KeywordsTest` |
+| `@prefix` (prefix flag) | not supported | Silently ignored | W3C tests skipped |
+| `@container: @id` / `@type` / `@graph` (1.1 container types) | not supported | Silent degradation | `JsonLd11KeywordsTest` |
 
 265 of the 467 W3C toRdf manifest tests specify `specVersion: json-ld-1.1`.
 
@@ -134,13 +134,13 @@ Reference: [JSON-LD 1.1 -- Section 3.1 (The Context)](https://www.w3.org/TR/json
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| Inline object context (`@context: {...}`) | supported | `JsonLdHandler:41-43`, via ml/json-ld | `Characterization:208-222`, `Unit:13-15` |
-| Array of inline contexts (`@context: [{...}, {...}]`) | supported | via ml/json-ld | `Characterization:224-237` |
-| String URL context (`@context: "http://..."`) | partial | via ml/json-ld (requires resolution) | `Characterization:187-206` (non-resolvable URL triggers ParseException) |
-| Context metadata preserved in ParsedRdf | implemented | `JsonLdHandler:52` | `Characterization:176-185,208-222,224-237` |
-| Remote context resolution (`http://` URLs) | not supported | no HTTP client configured | `W3cToRdfPositiveTest:77-79` (tests skipped) |
-| Scoped contexts (property-scoped) | not supported | ml/json-ld 1.0 limitation | W3C tests skipped |
-| `@context: null` validation | implemented | `JsonLdHandler:41-43` (`isset` returns false for null) | `Characterization:375-383` |
+| Inline object context (`@context: {...}`) | supported | via sweetrdf/json-ld | `Characterization`, `Unit` |
+| Array of inline contexts (`@context: [{...}, {...}]`) | supported | via sweetrdf/json-ld | `Characterization` |
+| String URL context (`@context: "http://..."`) | supported | via sweetrdf/json-ld `FileGetContentsLoader` | `RemoteContextTest` |
+| Context metadata preserved in ParsedRdf | implemented | `JsonLdHandler:145` | `Characterization` |
+| Remote context resolution (`http://` URLs) | supported | via sweetrdf/json-ld `FileGetContentsLoader` (HTTP fetching) | `RemoteContextTest` (8 tests) |
+| `disableRemoteContexts` security option | implemented | `JsonLdHandler:127-131` + `assertNoRemoteContexts()` | `RemoteContextTest` (4 security tests) |
+| Scoped contexts (property-scoped) | not supported | sweetrdf/json-ld 1.0 limitation | W3C tests skipped |
 
 ---
 
@@ -150,20 +150,22 @@ Reference: `parser-core` `ParsedRdf` value object
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| Returns `ParsedRdf` instance | implemented | `JsonLdHandler:55-60` | `Characterization:103-112`, `Unit:21-26` |
-| `format` set to `'json-ld'` | implemented | `JsonLdHandler:57` | `Characterization:114-122`, `Unit:25` |
-| `rawContent` preserves original input | implemented | `JsonLdHandler:58` | `Characterization:124-132` |
-| `graph` contains EasyRdf Graph | implemented | `JsonLdHandler:45-46,55` | `Characterization:165-174` (resource_count matches graph) |
-| `metadata` with `parser`, `format`, `resource_count`, `context` | implemented | `JsonLdHandler:48-53` | `Characterization:134-143,145-153,155-163,165-174,176-185` |
+| Returns `ParsedRdf` instance | implemented | `JsonLdHandler:149-154` | `Characterization`, `Unit` |
+| `format` set to `'json-ld'` | implemented | `JsonLdHandler:151` | `Characterization`, `Unit` |
+| `rawContent` preserves original input | implemented | `JsonLdHandler:152` | `Characterization` |
+| `graph` contains EasyRdf Graph | implemented | `JsonLdHandler:135-136` | `Characterization` |
+| `metadata` with 5 keys | implemented | `JsonLdHandler:141-147` | `Characterization` |
+| `metadata['named_graphs']` for named graph quads | implemented | `JsonLdHandler:139,146` | `NamedGraphSupportTest` |
 
 ### Metadata Schema
 
 ```php
 $metadata = [
-    'parser'         => 'jsonld_handler',    // constant string identifier
-    'format'         => 'json-ld',           // matches ParsedRdf::format
-    'resource_count' => count($graph->resources()), // integer
-    'context'        => $decoded['@context'],       // preserved from input
+    'parser'         => 'jsonld_handler',              // constant string identifier
+    'format'         => 'json-ld',                     // matches ParsedRdf::format
+    'resource_count' => count($graph->resources()),    // integer
+    'context'        => $decoded['@context'],          // preserved from input
+    'named_graphs'   => [...],                         // named graph quads (keyed by graph URI)
 ];
 ```
 
@@ -175,28 +177,20 @@ Reference: `parser-core` `ParseException`
 
 | Feature | Status | Location | Tests |
 |---|---|---|---|
-| Invalid JSON detection | implemented | `JsonLdHandler:36-38` (`json_decode` + `json_last_error`) | `Characterization:324-332,335-341,401-408,419-427` |
-| Missing `@context` detection | implemented | `JsonLdHandler:41-43` (`isset` check) | `Characterization:344-352,354-361,375-383,410-417`, `Unit:28-30` |
-| EasyRdf/ml-json-ld failure wrapping | implemented | `JsonLdHandler:64-66` (Throwable catch) | `Characterization:363-373,385-399` |
+| Invalid JSON detection | implemented | `JsonLdHandler:117-120` | `Characterization` |
+| Missing `@context` detection | implemented | `JsonLdHandler:122-124` | `Characterization`, `Unit` |
+| Remote context disabled | implemented | `JsonLdHandler:127-131` + `assertNoRemoteContexts()` | `RemoteContextTest` |
+| EasyRdf/sweetrdf-json-ld failure wrapping | implemented | `JsonLdHandler:156-160` | `Characterization`, `RemoteContextTest` |
 
 ### Error Flow
 
-The `parse()` method uses a two-layer exception strategy (lines 62-66):
+The `parseWithOptions()` method uses a multi-layer exception strategy:
 
-1. **`ParseException` re-throw** (line 62-63): Invalid JSON and missing `@context` throw `ParseException`
-   directly without a `$previous` exception and without the `"JSON-LD parsing failed:"` prefix.
-2. **`Throwable` wrapping** (line 64-66): Any exception thrown by EasyRdf or ml/json-ld is caught and
-   wrapped in a `ParseException` with the `"JSON-LD parsing failed:"` prefix and the original exception
-   as `$previous`.
-
-| Error Scenario | Message Prefix | `$previous` | Tests |
-|---|---|---|---|
-| Invalid JSON | `"Invalid JSON: "` | `null` | `Characterization:324-332,335-341` |
-| Missing `@context` | `"Missing @context in JSON-LD"` | `null` | `Characterization:344-352,354-361` |
-| `@context: null` | `"Missing @context in JSON-LD"` | `null` | `Characterization:375-383` |
-| EasyRdf/ml-json-ld failure | `"JSON-LD parsing failed: "` | original Throwable | `Characterization:363-373,385-399` |
-| Empty string input | `"Invalid JSON: "` | `null` | `Characterization:419-427` |
-| canHandle/parse gap (broken JSON with @context) | `"Invalid JSON: "` | `null` | `Characterization:429-433` |
+1. **JSON validation**: Invalid JSON throws `ParseException` with `"Invalid JSON: "` prefix.
+2. **`@context` validation**: Missing `@context` throws `ParseException`.
+3. **Remote context check**: If `disableRemoteContexts` is `true`, remote URLs cause `ParseException`.
+4. **`ParseException` re-throw**: Any `ParseException` from above is re-thrown as-is.
+5. **`Throwable` wrapping**: Any exception from EasyRdf/sweetrdf-json-ld is wrapped in `ParseException`.
 
 ---
 
@@ -211,45 +205,55 @@ in the conformance test suite.
 
 | Category | Count | Notes |
 |---|---|---|
-| Passing (triple comparison verified) | 22 | Full N-Triples output match |
-| Failed (library limitation) | 12 | See failure breakdown below |
-| Skipped (handler/library limitation) | 259 | See skip reasons below |
-| Deprecated (PHP deprecation from ml/json-ld) | 52 | Tests pass/skip but emit `E_DEPRECATED` |
+| Passing (triple comparison verified) | 79 | Full N-Triples output match (up from 22 baseline) |
+| Failed (library limitation) | 5 | See failure breakdown below (down from 12) |
+| Skipped (handler/library limitation) | 260 | See skip reasons below |
+| Deprecated (EasyRdf Collection/Resource) | 1 | EasyRdf `Collection::count()` return type |
 | **Total** | **345** | |
 
-**Failure breakdown (12 tests):**
+**Failure breakdown (5 tests):**
 
-| Failure Type | Count | Cause |
-|---|---|---|
-| `xsd:string` datatype mismatch | 8 | EasyRdf/ml-json-ld serializes plain literals with `^^<xsd:string>` but W3C expected output uses bare string literals |
-| Blank node count mismatch | 2 | Generalized RDF / library-specific bnode handling |
-| `@base` IRI resolution + `xsd:string` | 2 | Relative `@base` handling differences |
+| Failure Type | Count | Tests | Cause |
+|---|---|---|---|
+| Generalized RDF / bnode handling | 1 | `t0118` | `produceGeneralizedRdf` flag behavior |
+| Type-scoped context | 1 | `tc021` | 1.1 type-scoped context partially processed |
+| `@vocab` as blank node | 1 | `te075` | EasyRdf blank node handling for @vocab |
+| `@base` empty/relative resolution | 2 | `te089`, `te090` | Empty/relative `@base` overrides |
 
 **Skip reason breakdown:**
 
 | Skip Reason | Estimated Count |
 |---|---|
-| Handler requires `@context` at top level | ~70 |
-| JSON-LD 1.1 feature not supported by ml/json-ld ^1.2 | ~130 |
+| `@context` required at top level (handler limitation) | ~70 |
+| JSON-LD 1.1 feature not supported by sweetrdf/json-ld | ~130 |
 | Expected output contains only named graph quads | ~25 |
-| Test requires remote context resolution | ~30 |
-| Mixed named graph / default graph filtering | ~4 |
+| Test requires remote context resolution (fixture loader needed) | ~30 |
+| Mixed named graph / default graph filtering | ~5 |
 
 ### Positive Syntax Tests (16 in manifest)
 
 | Category | Count | Notes |
 |---|---|---|
-| Skipped | 16 | All lack `@context` at top level -- `canHandle` limitation |
+| Skipped | 16 | All lack `@context` at top level -- parse() limitation |
 
 ### Negative Evaluation Tests (106 in manifest)
 
 | Category | Count | Notes |
 |---|---|---|
-| Passing (exception correctly thrown) | 43 | ParseException or Throwable raised |
-| Skipped (1.1 validation not enforced) | 15 | ml/json-ld ^1.2 does not validate 1.1 error conditions |
-| Deprecated (PHP deprecation from ml/json-ld) | 48 | Tests pass/skip but emit `E_DEPRECATED` |
-| Unexpected failures | 0 | |
+| Passing (exception correctly thrown) | 90 | ParseException or Throwable raised (up from 43) |
+| Skipped (1.1 validation not enforced) | 16 | sweetrdf/json-ld does not validate all 1.1 error conditions |
+| Deprecated | 0 | (down from 48, sweetrdf fixes PHP 8.x warnings) |
 | **Total** | **106** | |
+
+### Improvement Summary (Epic 11)
+
+| Metric | Before (baseline) | After (Epic 11) | Change |
+|---|---|---|---|
+| Passing (positive + negative) | 65 | 169 | +104 (+160%) |
+| Failed | 12 | 5 | -7 (-58%) |
+| Deprecated | 100 | 1 | -99 (-99%) |
+| Skipped | 290 | 276 | -14 (-5%) |
+| Warnings | 0 | 6 | +6 (new test coverage) |
 
 ---
 
@@ -273,47 +277,39 @@ in the conformance test suite.
 |---|---|---|
 | Unit tests | `tests/Unit/JsonLdHandlerTest.php` | 4 |
 | Unit tests (aliases) | `tests/Unit/AliasesTest.php` | 10 |
+| Unit tests (canHandle) | `tests/Unit/CanHandleDetectionTest.php` | 23 |
+| Unit tests (base URI + xsd:string) | `tests/Unit/BaseUriAndXsdStringTest.php` | 8 |
+| Unit tests (named graphs) | `tests/Unit/NamedGraphSupportTest.php` | 6 |
+| Unit tests (remote contexts) | `tests/Unit/RemoteContextTest.php` | 8 |
+| Unit tests (JSON-LD 1.1 keywords) | `tests/Unit/JsonLd11KeywordsTest.php` | 16 |
 | Characterization tests | `tests/Characterization/JsonLdHandlerTest.php` | 50 |
 | W3C positive evaluation | `tests/Conformance/W3cToRdfPositiveTest.php` | 345 (dynamic) |
 | W3C positive syntax | `tests/Conformance/W3cToRdfPositiveTest.php` | 16 (dynamic) |
 | W3C negative evaluation | `tests/Conformance/W3cToRdfNegativeTest.php` | 106 (dynamic) |
-| **Total** | | **531** |
-
-### Coverage by Area
-
-| Area | Test Count | Coverage Notes |
-|---|---|---|
-| `canHandle()` true cases | 6 | Standard JSON-LD, whitespace, false positives |
-| `canHandle()` false cases | 11 | Empty, Turtle, RDF/XML, N-Triples, HTML, arrays, no context, uppercase |
-| `parse()` success paths | 13 | Class declarations, properties, @graph, language tags, typed literals, minimal |
-| `parse()` metadata verification | 7 | All 4 metadata keys individually verified |
-| `parse()` context preservation | 4 | Object context, array context, string URL context, empty context |
-| Error handling | 11 | Invalid JSON, missing context, null context, EasyRdf wrapping, empty string, canHandle/parse gap |
-| Prefix side effects | 3 | Namespace count unchanged, standard prefixes kept, no registerPrefixesFromContent |
-| Backward compatibility | 10 | Alias resolution, instanceof, deprecation warnings, no eager aliasing |
-| W3C conformance | 467 | Full manifest exercised (22 + 43 passing, rest skipped/deprecated/failed) |
+| **Total** | | **592** |
 
 ---
 
 ## Architecture Notes
 
-The implementation is minimal by design -- a **single 73-line class** with three methods:
+The handler is a **single ~270-line class** with the following structure:
 
-1. **`canHandle`** (lines 21-30): Two-step heuristic -- starts with `{` and contains `@context`.
-2. **`parse`** (lines 32-67): Validates JSON + `@context`, delegates to `EasyRdf\Graph::parse('jsonld')`,
-   wraps result in `ParsedRdf`.
-3. **`getFormatName`** (lines 69-72): Returns `'json-ld'`.
+1. **`canHandle`** (lines 44-71): JSON decode + keyword/IRI detection. Supports objects and arrays.
+2. **`parse`** (lines 100-103): Delegates to `parseWithOptions` with empty options.
+3. **`parseWithOptions`** (lines 114-161): Full parsing with options (`base`, `disableRemoteContexts`).
+   Validates JSON, checks `@context`, handles remote context security, delegates to EasyRdf,
+   extracts named graphs, builds `ParsedRdf` with metadata.
+4. **`assertNoRemoteContexts`** (lines 173-201): Security check for remote context URLs.
+5. **`extractNamedGraphs`** (lines 208-264): Direct `ML\JsonLD\JsonLD::toRdf()` for named graph quads.
+6. **`getFormatName`** (lines 266-269): Returns `'json-ld'`.
 
 Key design decisions:
 
-1. **Full delegation to EasyRdf + ml/json-ld** for actual JSON-LD processing. The handler itself
-   performs no JSON-LD-specific transformation -- it only validates structure and wraps results.
-2. **No prefix registration** -- unlike the Turtle and RDF/XML handlers in `parser-owl`, the JSON-LD
-   handler does not call `RdfNamespace::set()`. Prefix handling is left entirely to EasyRdf.
-3. **No base URI support** -- the handler does not accept or pass a base URI to EasyRdf.
-   This affects relative IRI resolution in some W3C tests.
-4. **`@context` is required** -- the handler mandates a top-level `@context` key. While the JSON-LD
-   spec allows documents without `@context` (using full IRIs), this handler rejects them.
+1. **Full delegation to EasyRdf + sweetrdf/json-ld** for actual JSON-LD processing.
+2. **`parseWithOptions()`** extends the interface with `base` URI and `disableRemoteContexts` support.
+3. **Named graphs in metadata** -- avoids modifying parser-core's `ParsedRdf` value object.
+4. **`@context` is still required for `parse()`** -- documents using only full IRIs are rejected.
+5. **sweetrdf/json-ld ^1.3** replaces ml/json-ld ^1.2, fixing all PHP 8.x deprecation warnings.
 
 ---
 
@@ -321,30 +317,54 @@ Key design decisions:
 
 ### Handler-Level Gaps
 
-1. **No JSON-LD array support** -- `canHandle` rejects documents starting with `[`, though
-   `[{...}]` is valid JSON-LD.
-2. **Substring-based `@context` detection** -- false positives when `@context` appears inside
-   string values or nested objects rather than as a top-level key.
-3. **No base URI parameter** -- `parse()` does not accept a base URI, preventing correct
-   relative IRI resolution.
-4. **`@context` required** -- documents using only full IRIs (no `@context`) are rejected
-   by both `canHandle` and `parse`.
+1. **`@context` required for `parse()`** -- documents using only full IRIs (no `@context`) are rejected
+   by `parse()`. The `canHandle()` method detects them correctly, but `parse()` throws `ParseException`.
+2. **W3C remote context fixtures** -- ~30 W3C tests use relative context URLs that need a
+   `FixtureDocumentLoader` to serve fixture files. Would require `JsonLD::setDefaultDocumentLoader()`
+   (global state, test isolation risk) or modifying EasyRdf.
 
-### Library-Level Gaps (ml/json-ld ^1.2)
+### Library-Level Gaps (sweetrdf/json-ld ^1.3)
 
-1. **JSON-LD 1.0 only** -- ml/json-ld ^1.2 implements JSON-LD 1.0 Processing Algorithms.
+1. **JSON-LD 1.0 only** -- sweetrdf/json-ld ^1.3 implements JSON-LD 1.0 Processing Algorithms.
    All JSON-LD 1.1 features (`@nest`, `@included`, `@json`, `@direction`, `@propagate`,
-   `@protected`, `@import`, `@prefix`, scoped contexts) are unsupported.
-2. **`xsd:string` datatype normalization** -- ml/json-ld serializes plain string literals with
-   explicit `^^<http://www.w3.org/2001/XMLSchema#string>`, while the W3C test suite expects
-   bare string literals without a datatype. This causes 8 test failures.
-3. **Named graph quads dropped** -- EasyRdf's JSON-LD parser (`Parser\JsonLd:86-88`) skips
-   all quads belonging to named graphs, returning only the default graph.
-4. **PHP deprecation notices** -- ml/json-ld emits `E_DEPRECATED` warnings on 52+ tests
-   due to use of deprecated PHP features.
+   `@protected`, `@import`, `@prefix`, `@version`, scoped contexts) are unsupported.
+   This blocks ~265 W3C tests.
+2. **Named graph quads dropped by EasyRdf** -- EasyRdf's JSON-LD parser (`Parser\JsonLd:86-88`) skips
+   all quads belonging to named graphs. Named graphs are preserved via `extractNamedGraphs()` in
+   metadata, but not in the EasyRdf Graph object.
+3. **EasyRdf PHP 8.x deprecation** -- EasyRdf itself emits 1-2 `E_DEPRECATED` warnings
+   (`Collection::count()`, `Resource::offsetExists()`) unrelated to JSON-LD processing.
 
 ### Path to Higher W3C Conformance
 
-Upgrading to a JSON-LD 1.1 processor (e.g., replacing ml/json-ld with a 1.1-compliant library)
-would address the largest gap (~265 tests). Adding base URI support and relaxing the `@context`
-requirement would address an additional ~86 tests.
+1. **Fixture document loader** (~30 tests): Implement a `FixtureDocumentLoader` serving W3C test
+   fixture files to unblock remote context tests.
+2. **JSON-LD 1.1 processor** (~265 tests): When a PHP JSON-LD 1.1 library becomes available
+   (or if sweetrdf/json-ld adds 1.1 support), adopt it.
+3. **Positive syntax tests** (16 tests): Relax the `@context` requirement in `parse()` for
+   documents that `canHandle()` already detects.
+
+---
+
+## JSON-LD 1.1 Dependency Strategy Decision (Story 11.1)
+
+> Decision date: 2026-02-20
+
+### Decision: Phased approach
+
+**Phase 1 (Stories 11.2 through 11.6) -- COMPLETED:**
+- Replaced `ml/json-ld ^1.2` with `sweetrdf/json-ld ^1.3` (PHP 8.x deprecation fix)
+- Fixed handler-level gaps: `canHandle()` detection, base URI parameter, `xsd:string` normalization
+- Implemented named graph support, remote context security option
+- Documented JSON-LD 1.1 keyword status
+- Impact: deprecated tests 100 -> 1, failed tests 12 -> 5, passing tests 65 -> 169
+
+**Phase 2 (future): JSON-LD 1.1 features**
+- Defer full JSON-LD 1.1 implementation until a PHP 1.1 processor becomes available
+- If `sweetrdf/json-ld` gains 1.1 support, adopt it (lowest effort path)
+- If no PHP 1.1 processor emerges, evaluate Node.js subprocess approach
+- Direct PHP implementation is last resort due to extreme scope (~100 pages of processing algorithms)
+
+### Options Evaluated
+
+See earlier in this document for the full evaluation of Options A through E.

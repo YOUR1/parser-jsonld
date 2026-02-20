@@ -108,9 +108,14 @@ if (!function_exists('normalizeNTriples')) {
     /**
      * Normalize N-Triples/N-Quads output for comparison.
      * Returns sorted array of non-empty trimmed lines.
+     * Strips explicit ^^xsd:string from plain literals (RDF 1.1 equivalence).
      */
     function normalizeNTriples(string $nt): array
     {
+        // Strip explicit xsd:string datatype from plain literals
+        // In RDF 1.1, "value"^^<xsd:string> is equivalent to "value"
+        $nt = stripXsdString($nt);
+
         $lines = explode("\n", $nt);
         $lines = array_map('trim', $lines);
         $lines = array_filter($lines, fn(string $line) => $line !== '' && !str_starts_with($line, '#'));
@@ -118,6 +123,24 @@ if (!function_exists('normalizeNTriples')) {
         sort($lines);
 
         return $lines;
+    }
+}
+
+if (!function_exists('stripXsdString')) {
+    /**
+     * Strip explicit ^^<http://www.w3.org/2001/XMLSchema#string> from N-Triples literals.
+     *
+     * Converts "value"^^<http://www.w3.org/2001/XMLSchema#string> to "value".
+     * This normalizes RDF 1.1 plain literal equivalence for comparison.
+     * Language-tagged literals and other datatypes are not affected.
+     */
+    function stripXsdString(string $ntriples): string
+    {
+        return str_replace(
+            '"^^<http://www.w3.org/2001/XMLSchema#string>',
+            '"',
+            $ntriples
+        );
     }
 }
 
