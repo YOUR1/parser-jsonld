@@ -34,6 +34,7 @@ if (!function_exists('parseToRdfManifest')) {
                 'processingMode' => $entry['option']['processingMode'] ?? null,
                 'produceGeneralizedRdf' => $entry['option']['produceGeneralizedRdf'] ?? false,
                 'rdfDirection' => $entry['option']['rdfDirection'] ?? null,
+                'base' => $entry['option']['base'] ?? null,
             ];
         }
 
